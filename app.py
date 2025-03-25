@@ -1,64 +1,59 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
-import requests
-import cloudscraper
-from bs4 import BeautifulSoup
-from googlesearch import search
+import numpy as np
+import cv2
+import onnxruntime as ort
+from PIL import Image
+import io
+import os
 
 app = Flask(__name__)
-CORS(app)  # 🔥 Allow frontend requests
+CORS(app)  # ✅ CORS Enable (Sabhi Origins Allowed Hain)
 
-scraper = cloudscraper.create_scraper()  # 🔥 Cloudflare bypass
+# ✅ AI Model Sirf Ek Baar Load Karein (Startup Pe)
+model_path = "static/u2net.onnx"
+if not os.path.exists(model_path):
+    raise FileNotFoundError(f"Model file not found at {model_path}")
 
-def google_search(query, max_results=5):
-    """Google se top movie download links fetch karega"""
-    results = []
-    try:
-        for url in search(query, stop=max_results):
-            results.append(url)
-    except Exception as e:
-        return {"error": str(e)}
-    return results
+ort_session = ort.InferenceSession(model_path)
 
-def get_real_movie_links(url):
-    """🔥 Ads & JavaScript redirects bypass karke real download link nikalta hai"""
-    try:
-        response = scraper.get(url)  # 🔥 Cloudflare bypass request
-        soup = BeautifulSoup(response.text, "html.parser")
+def remove_bg(image):
+    image = image.convert("RGB")
+    image = image.resize((320, 320))
+    img_array = np.array(image).astype(np.float32) / 255.0
+    img_array = img_array.transpose(2, 0, 1)[None, :, :, :]
 
-        # 🔹 Find all links in the page
-        all_links = [a["href"] for a in soup.find_all("a", href=True)]
+    # Model Prediction
+    input_name = ort_session.get_inputs()[0].name
+    output = ort_session.run(None, {input_name: img_array})[0][0][0]
 
-        # 🔥 Filter only actual download links (adjust according to the website)
-        download_links = [link for link in all_links if "download" in link.lower()]
-        
-        return download_links if download_links else ["No direct links found"]
+    # Create Mask
+    mask = (output > 0.5).astype(np.uint8) * 255
+    mask = cv2.resize(mask, (image.width, image.height))
 
-    except Exception as e:
-        return [f"Error: {str(e)}"]
+    # Remove Background
+    img_np = np.array(image)
+    img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2RGBA)
+    img_np[:, :, 3] = mask
 
-@app.route("/search", methods=["GET"])
-def search_movie():
-    """User se movie name lega, Google se movie links fetch karega, aur real download links dega"""
-    movie_name = request.args.get("movie")
+    return Image.fromarray(img_np)
 
-    if not movie_name:
-        return jsonify({"error": "Please provide a movie name"}), 400
+@app.route('/')
+def home():
+    return jsonify({"message": "U²-Net Background Remover API is Running!"})
 
-    query = f"{movie_name} site:vegamovies.wiki OR site:hdhub4u.life OR site:7starhd.bio"
-    movie_sites = google_search(query)
+@app.route('/remove-bg', methods=['POST'])
+def remove_bg_api():
+    if 'image' not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
 
-    if "error" in movie_sites:
-        return jsonify({"error": "Failed to fetch movie links"}), 500
+    image = Image.open(request.files['image'])
+    result = remove_bg(image)
 
-    # 🔥 Get actual download links from each movie site
-    final_links = {}
-    for site in movie_sites:
-        final_links[site] = get_real_movie_links(site)
-
-    return jsonify({"download_links": final_links})
+    img_io = io.BytesIO()
+    result.save(img_io, "PNG")
+    img_io.seek(0)
+    return send_file(img_io, mimetype="image/png")
 
 if __name__ == "__main__":
-    app.run(debug=True)
-
-
+    app.run(host="0.0.0.0", port=10000)
