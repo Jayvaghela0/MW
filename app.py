@@ -1,59 +1,41 @@
-from flask import Flask, request, send_file, jsonify
-from flask_cors import CORS
-import numpy as np
-import cv2
-import onnxruntime as ort
-from PIL import Image
-import io
 import os
+import requests
+from flask import Flask, request, send_file
+from rembg import remove
 
 app = Flask(__name__)
-CORS(app)  # ✅ CORS Enable (Sabhi Origins Allowed Hain)
 
-# ✅ AI Model Sirf Ek Baar Load Karein (Startup Pe)
-model_path = "static/u2net.onnx"
-if not os.path.exists(model_path):
-    raise FileNotFoundError(f"Model file not found at {model_path}")
+# Model Path
+MODEL_PATH = "u2net.onnx"
 
-ort_session = ort.InferenceSession(model_path)
+# Model Auto-Download
+MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx"
 
-def remove_bg(image):
-    image = image.convert("RGB")
-    image = image.resize((320, 320))
-    img_array = np.array(image).astype(np.float32) / 255.0
-    img_array = img_array.transpose(2, 0, 1)[None, :, :, :]
+if not os.path.exists(MODEL_PATH):
+    print("🔄 Downloading U2-Net Model...")
+    response = requests.get(MODEL_URL, stream=True)
+    with open(MODEL_PATH, "wb") as f:
+        for chunk in response.iter_content(chunk_size=1024):
+            f.write(chunk)
+    print("✅ Model Downloaded Successfully!")
 
-    # Model Prediction
-    input_name = ort_session.get_inputs()[0].name
-    output = ort_session.run(None, {input_name: img_array})[0][0][0]
+@app.route("/remove-bg", methods=["POST"])
+def remove_bg():
+    if "image" not in request.files:
+        return "No file uploaded", 400
 
-    # Create Mask
-    mask = (output > 0.5).astype(np.uint8) * 255
-    mask = cv2.resize(mask, (image.width, image.height))
+    image_file = request.files["image"]
+    input_image = image_file.read()
 
-    # Remove Background
-    img_np = np.array(image)
-    img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2RGBA)
-    img_np[:, :, 3] = mask
+    # Process Image with rembg
+    output_image = remove(input_image)
 
-    return Image.fromarray(img_np)
+    # Save & Send Processed Image
+    output_path = "output.png"
+    with open(output_path, "wb") as f:
+        f.write(output_image)
 
-@app.route('/')
-def home():
-    return jsonify({"message": "U²-Net Background Remover API is Running!"})
-
-@app.route('/remove-bg', methods=['POST'])
-def remove_bg_api():
-    if 'image' not in request.files:
-        return jsonify({"error": "No image uploaded"}), 400
-
-    image = Image.open(request.files['image'])
-    result = remove_bg(image)
-
-    img_io = io.BytesIO()
-    result.save(img_io, "PNG")
-    img_io.seek(0)
-    return send_file(img_io, mimetype="image/png")
+    return send_file(output_path, mimetype="image/png")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(debug=True)
