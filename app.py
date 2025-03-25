@@ -1,14 +1,13 @@
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
 import re
 import time
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 import undetected_chromedriver as uc
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Function to scrape direct movie download link
 def get_movie_download_link(search_query):
