@@ -1,59 +1,64 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # CORS Enable karne ke liye
-from googlesearch import search
+from flask_cors import CORS
 import requests
+import cloudscraper
 from bs4 import BeautifulSoup
-import cloudscraper  # Cloudflare Bypass ke liye
+from googlesearch import search
 
 app = Flask(__name__)
-CORS(app)  # API ko all origins ke liye enable karne ke liye
+CORS(app)  # 🔥 Allow frontend requests
 
-def get_movie_links(movie_name):
-    """Google search se movie ke relevant pages ka URL extract karta hai"""
-    query = f"{movie_name} site:vegamovies.homes OR site:hdhub4u.mov OR site:7starhdmovies.win"
+scraper = cloudscraper.create_scraper()  # 🔥 Cloudflare bypass
+
+def google_search(query, max_results=5):
+    """Google se top movie download links fetch karega"""
     results = []
-
-    for url in search(query, num=5, stop=5, pause=2):
-        results.append(url)
-
+    try:
+        for url in search(query, stop=max_results):
+            results.append(url)
+    except Exception as e:
+        return {"error": str(e)}
     return results
 
-def get_download_links(movie_page_url):
-    """Vegamovies ya HDHub4u ke pages se real download links extract karta hai"""
-    scraper = cloudscraper.create_scraper()
-    headers = {"User-Agent": "Mozilla/5.0"}
-    
-    response = scraper.get(movie_page_url, headers=headers)
-    
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        download_links = []
+def get_real_movie_links(url):
+    """🔥 Ads & JavaScript redirects bypass karke real download link nikalta hai"""
+    try:
+        response = scraper.get(url)  # 🔥 Cloudflare bypass request
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # 🔹 Find all links in the page
+        all_links = [a["href"] for a in soup.find_all("a", href=True)]
+
+        # 🔥 Filter only actual download links (adjust according to the website)
+        download_links = [link for link in all_links if "download" in link.lower()]
         
-        for link in soup.find_all('a', href=True):
-            if "https://files" in link['href']:  # Download links ka pattern match karna
-                download_links.append(link['href'])
-        
-        return download_links
-    return []
+        return download_links if download_links else ["No direct links found"]
+
+    except Exception as e:
+        return [f"Error: {str(e)}"]
 
 @app.route("/search", methods=["GET"])
 def search_movie():
-    """Movie search API jo Google se data fetch karegi aur direct links return karegi"""
+    """User se movie name lega, Google se movie links fetch karega, aur real download links dega"""
     movie_name = request.args.get("movie")
-    
+
     if not movie_name:
         return jsonify({"error": "Please provide a movie name"}), 400
-    
-    movie_links = get_movie_links(movie_name)
-    
-    if not movie_links:
-        return jsonify({"error": "No movie found"}), 404
-    
-    all_download_links = []
-    for link in movie_links:
-        all_download_links.extend(get_download_links(link))
-    
-    return jsonify({"download_links": all_download_links})
+
+    query = f"{movie_name} site:vegamovies.wiki OR site:hdhub4u.life OR site:7starhd.bio"
+    movie_sites = google_search(query)
+
+    if "error" in movie_sites:
+        return jsonify({"error": "Failed to fetch movie links"}), 500
+
+    # 🔥 Get actual download links from each movie site
+    final_links = {}
+    for site in movie_sites:
+        final_links[site] = get_real_movie_links(site)
+
+    return jsonify({"download_links": final_links})
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
