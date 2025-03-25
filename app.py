@@ -4,15 +4,19 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import time
-import undetected_chromedriver as uc
+from seleniumwire import webdriver
+from selenium.webdriver.chrome.options import Options
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
-# Function to scrape direct movie download link
+# ✅ Fix: Custom Chrome Binary Path for Render
+CHROME_PATH = "/usr/bin/google-chrome-stable"
+CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
+
+# ✅ Function to scrape direct movie download link
 def get_movie_download_link(search_query):
     try:
-        # Google Search to find movie download websites
         google_search_url = f"https://www.google.com/search?q={search_query}+movie+download+site"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(google_search_url, headers=headers)
@@ -37,7 +41,7 @@ def get_movie_download_link(search_query):
         return None
 
 
-# Scraper Function (Handles Both Static & JavaScript-based Sites)
+# ✅ Scraper Function (Handles Static & JavaScript Sites)
 def scrape_direct_link(url):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -48,30 +52,31 @@ def scrape_direct_link(url):
 
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # Extract direct download link from static pages
+        # ✅ Extract direct download link from static pages
         matches = re.findall(r'https?://[^\s]+?\.mp4', response.text)
         if matches:
             return matches[0]
 
-        # If no direct link found, use JavaScript Execution (Selenium)
+        # ✅ If no direct link found, use Selenium
         return scrape_js_generated_link(url)
     except Exception as e:
         print(f"Scraping Error: {e}")
         return None
 
 
-# Handle JavaScript-Generated Links using Selenium
+# ✅ Fix Selenium for Render (Handle JavaScript-Generated Links)
 def scrape_js_generated_link(url):
     try:
-        options = uc.ChromeOptions()
-        options.add_argument("--headless")  # Run in background
+        options = Options()
+        options.binary_location = CHROME_PATH  # ✅ Fix Chrome Binary Location
+        options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
 
-        driver = uc.Chrome(options=options)
+        driver = webdriver.Chrome(executable_path=CHROMEDRIVER_PATH, options=options)
         driver.get(url)
 
-        time.sleep(5)  # Wait for JavaScript to load
+        time.sleep(5)  # ✅ Wait for JavaScript to load
 
         links = driver.find_elements("tag name", "a")
         direct_links = [link.get_attribute("href") for link in links if ".mp4" in link.get_attribute("href")]
@@ -84,7 +89,7 @@ def scrape_js_generated_link(url):
         return None
 
 
-# Flask Routes
+# ✅ Flask Routes
 @app.route("/")
 def home():
     return render_template("index.html")
