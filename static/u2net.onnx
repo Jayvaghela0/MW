@@ -1,1 +1,2 @@
+wget https://github.com/onnx/models/raw/main/vision/object_segmentation/u2net/u2net.onnx -O static/u2net.onnx
 
