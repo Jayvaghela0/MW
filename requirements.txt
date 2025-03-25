@@ -1,6 +1,7 @@
-Flask
-Flask-Cors
-googlesearch-python
-cloudscraper
-beautifulsoup4
+flask
+flask-cors
 gunicorn
+numpy
+onnxruntime
+opencv-python
+Pillow
