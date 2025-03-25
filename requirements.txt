@@ -3,5 +3,4 @@ requests
 beautifulsoup4
 flask-cors
 selenium
-undetected-chromedriver
-gunicorn
+selenium-wire
