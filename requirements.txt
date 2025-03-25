@@ -1,6 +1,7 @@
 Flask
 requests
 beautifulsoup4
+flask-cors
 selenium
 undetected-chromedriver
 gunicorn
