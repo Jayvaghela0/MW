@@ -1,6 +1,6 @@
-Flask==3.0.0
-Flask-Cors==4.0.0
-googlesearch-python==1.0.2
-cloudscraper==1.2.71
-beautifulsoup4==4.12.2
-gunicorn==21.2.0
+Flask
+Flask-Cors
+googlesearch-python
+cloudscraper
+beautifulsoup4
+gunicorn
