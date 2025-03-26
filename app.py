@@ -1,5 +1,6 @@
 import os
 import requests
+import threading
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from rembg import remove
@@ -7,20 +8,22 @@ from rembg import remove
 app = Flask(__name__)
 CORS(app)  # ✅ Enable CORS for cross-origin requests
 
-# Model Path
-MODEL_PATH = "u2net.onnx"
+# ✅ Use U2Net-Lite Model (20MB) for Low Memory Usage
+MODEL_PATH = "u2net_lite.onnx"
+MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net_lite.onnx"
 
-# Model Auto-Download
-MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx"
+# 🔄 Download model if not exists (Runs in a separate thread)
+def download_model():
+    if not os.path.exists(MODEL_PATH):
+        print("🔄 Downloading U2Net-Lite Model...")
+        response = requests.get(MODEL_URL, stream=True)
+        with open(MODEL_PATH, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024):
+                f.write(chunk)
+        print("✅ Model Downloaded Successfully!")
 
-# 🔄 Check if model exists, else download it
-if not os.path.exists(MODEL_PATH):
-    print("🔄 Downloading U2-Net Model...")
-    response = requests.get(MODEL_URL, stream=True)
-    with open(MODEL_PATH, "wb") as f:
-        for chunk in response.iter_content(chunk_size=1024):
-            f.write(chunk)
-    print("✅ Model Downloaded Successfully!")
+# Run model download in a separate thread to avoid blocking requests
+threading.Thread(target=download_model).start()
 
 @app.route("/")
 def home():
@@ -35,7 +38,7 @@ def remove_bg():
     input_image = image_file.read()
 
     try:
-        # Process Image with rembg
+        # Process Image with rembg (Multi-threaded processing)
         output_image = remove(input_image)
 
         # Save & Send Processed Image
@@ -49,4 +52,4 @@ def remove_bg():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, threaded=True)  # ✅ Enable multi-threading for handling multiple requests
