@@ -1,0 +1,10 @@
+# Hugging Face Spacefile Configuration
+---
+title: "AI Background Remover"
+emoji: "🖼️"
+colorFrom: "blue"
+colorTo: "purple"
+sdk: "docker"
+app_port: 7860
+python_version: "3.9"
+dockerfile: true
